@@ -66,7 +66,7 @@ export function Dashboard() {
           <p className="text-xl font-bold text-slate-900">{formatCurrency(profile.financial.monthlyIncome)}</p>
         </Card>
         <Card>
-          <CardHeader><CardDescription>Investable Surplus</CardDescription></CardHeader>
+          <CardHeader><CardDescription>Monthly Surplus</CardDescription></CardHeader>
           <p className="text-xl font-bold text-green-600">
             {cashflow ? formatCurrency(surplusBeforeGoals) : '—'}
           </p>
