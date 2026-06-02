@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { useGoalsStore } from '@/store/goalsStore'
-import { useUserStore } from '@/store/userStore'
+
 import type { GoalTemplate, UserGoal, GoalPriority } from '@/types'
 import { formatCurrency } from '@/utils/format.utils'
 
@@ -23,7 +23,7 @@ export function GoalSelectionStep({ onNext, onBack }: { onNext: () => void; onBa
   const userGoals = useGoalsStore(s => s.userGoals)
   const addGoal = useGoalsStore(s => s.addGoal)
   const removeGoal = useGoalsStore(s => s.removeGoal)
-  const profile = useUserStore(s => s.profile)
+
 
   const [selectedTemplate, setSelectedTemplate] = useState<GoalTemplate | null>(null)
   const [goalForm, setGoalForm] = useState<Partial<UserGoal>>({})
@@ -86,20 +86,6 @@ export function GoalSelectionStep({ onNext, onBack }: { onNext: () => void; onBa
     if (userGoals.length === 0) {
       setFinishError('Please select at least one goal to continue')
       return
-    }
-    const hasEmergencyFund = userGoals.some(g => g.category === 'EMERGENCY_FUND')
-    if (!hasEmergencyFund && profile?.financial.monthlyExpenses) {
-      const emergencyTarget = profile.financial.monthlyExpenses * profile.financial.emergencyFundMonths
-      addGoal({
-        templateId: 'tpl_emergency',
-        name: 'Emergency Fund',
-        category: 'EMERGENCY_FUND',
-        targetAmount: emergencyTarget,
-        targetYear: CURRENT_YEAR + 1,
-        currentSavingsForGoal: 0,
-        priority: 'HIGH',
-        status: 'NOT_STARTED',
-      })
     }
     onNext()
   }

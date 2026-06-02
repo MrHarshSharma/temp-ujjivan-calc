@@ -24,7 +24,7 @@ export function Dashboard() {
   const isOnboardingComplete = useUserStore(s => s.isOnboardingComplete)
   const userGoals = useGoalsStore(s => s.userGoals)
   const recommendation = useRecommendationStore(s => s.recommendation)
-  const { cashflow, goalAnalyses, projection } = useCalculations()
+  const { cashflow, goalAnalyses, projection, surplusBeforeGoals } = useCalculations()
 
   if (!isOnboardingComplete || !profile) {
     return (
@@ -66,10 +66,15 @@ export function Dashboard() {
           <p className="text-xl font-bold text-slate-900">{formatCurrency(profile.financial.monthlyIncome)}</p>
         </Card>
         <Card>
-          <CardHeader><CardDescription>Monthly Surplus</CardDescription></CardHeader>
-          <p className={`text-xl font-bold ${(cashflow?.monthlySurplus ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {cashflow ? formatCurrency(cashflow.monthlySurplus) : '—'}
+          <CardHeader><CardDescription>Investable Surplus</CardDescription></CardHeader>
+          <p className="text-xl font-bold text-green-600">
+            {cashflow ? formatCurrency(surplusBeforeGoals) : '—'}
           </p>
+          {cashflow && cashflow.monthlySurplus < 0 && (
+            <p className="text-xs text-amber-600 mt-1">
+              ₹{Math.round(Math.abs(cashflow.monthlySurplus) / 1000)}K more needed for all goals
+            </p>
+          )}
         </Card>
         <Card>
           <CardHeader><CardDescription>Savings Rate</CardDescription></CardHeader>

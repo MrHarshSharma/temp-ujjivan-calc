@@ -14,6 +14,7 @@ interface CalculationsResult {
   goalAnalyses: GoalAnalysis[]
   projection: ProjectionDataPoint[]
   availableSurplus: number
+  surplusBeforeGoals: number
 }
 
 export function useCalculations(): CalculationsResult {
@@ -22,7 +23,7 @@ export function useCalculations(): CalculationsResult {
 
   return useMemo(() => {
     if (!profile) {
-      return { cashflow: null, goalAnalyses: [], projection: [], availableSurplus: 0 }
+      return { cashflow: null, goalAnalyses: [], projection: [], availableSurplus: 0, surplusBeforeGoals: 0 }
     }
 
     const currentYear = new Date().getFullYear()
@@ -67,6 +68,7 @@ export function useCalculations(): CalculationsResult {
       goalAnalyses,
       projection,
       availableSurplus: cashflow.monthlySurplus,
+      surplusBeforeGoals,
     }
   }, [profile, userGoals])
 }
