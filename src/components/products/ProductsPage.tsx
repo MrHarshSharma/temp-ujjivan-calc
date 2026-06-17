@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/Button'
 import { RiskBadge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { ProductForm } from './ProductForm'
-import type { ProductCategory, ProductMaster } from '@/types'
+import type { ProductCategory, ProductMaster, ProductReturnHistory } from '@/types'
 import { formatPercent } from '@/utils/format.utils'
+import { hasXirr } from '@/engine/product.engine'
 
 const CATEGORY_CONFIG: Record<ProductCategory, { label: string; color: string }> = {
   MUTUAL_FUND:   { label: 'Mutual Fund',  color: 'bg-blue-50 text-blue-700 border-blue-200' },
@@ -27,6 +28,20 @@ function ReturnCell({ value }: { value: number }) {
   if (value === 0) return <span className="text-slate-400 text-sm">—</span>
   const color = value >= 10 ? 'text-green-600' : value >= 7 ? 'text-amber-600' : 'text-slate-600'
   return <span className={`text-sm font-semibold ${color}`}>{formatPercent(value)}</span>
+}
+
+function XirrRow({ history }: { history: ProductReturnHistory }) {
+  if (!hasXirr(history)) {
+    return <p className="text-[11px] text-slate-400 mt-1">XIRR: N/A — protection product</p>
+  }
+  const cell = (label: string, v: number | null) =>
+    `${label}: ${v != null ? `${v.toFixed(1)}%` : '—'}`
+  return (
+    <p className="text-[11px] text-slate-500 mt-1 font-medium">
+      {cell('3yr', history.xirr3yr)} · {cell('5yr', history.xirr5yr)} · {cell('10yr', history.xirr10yr)}
+      {history.asOf && <span className="text-slate-400 font-normal"> · as of {history.asOf}</span>}
+    </p>
+  )
 }
 
 function LiquidityDots({ score }: { score: number }) {
@@ -65,8 +80,19 @@ function ProductRow({
     <tr className={`border-b border-slate-100 transition-colors hover:bg-slate-50 ${!product.isActive ? 'opacity-40' : ''}`}>
       {/* Product */}
       <td className="px-5 py-3.5">
-        <p className="text-sm font-semibold text-slate-900 leading-snug">{product.name}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-slate-900 leading-snug">{product.name}</p>
+          <span
+            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border whitespace-nowrap
+              ${product.isUjjivanProduct
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200'}`}
+          >
+            {product.isUjjivanProduct ? 'Ujjivan' : '3rd-party'}
+          </span>
+        </div>
         <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[260px]">{product.description}</p>
+        <XirrRow history={product.returnHistory} />
       </td>
 
       {/* Category */}

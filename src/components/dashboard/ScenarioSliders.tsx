@@ -114,7 +114,7 @@ export function ScenarioSliders() {
             className="w-full accent-blue-600 h-1.5"
           />
           <div className="flex justify-between text-xs text-slate-400 -mt-1">
-            <span>₹0</span><span>₹50K</span>
+            <span>₹0</span><span>{formatCurrency(50000)}</span>
           </div>
         </div>
 

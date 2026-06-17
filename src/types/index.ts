@@ -161,6 +161,19 @@ export interface GoalAnalysis {
 
 // ─── Products ───────────────────────────────────────────────────────────────
 
+/**
+ * Historical XIRR performance for a product (F-07).
+ * Values are % to 1 decimal. `null` = not available / not applicable
+ * (e.g. protection products show "N/A — protection product").
+ */
+export interface ProductReturnHistory {
+  xirr3yr: number | null
+  xirr5yr: number | null
+  xirr10yr: number | null
+  /** Data-as-of label, e.g. "2026-03" — always shown next to XIRR to flag stale data. */
+  asOf: string | null
+}
+
 export interface ProductMaster {
   id: string
   name: string
@@ -175,6 +188,26 @@ export interface ProductMaster {
   suitableGoalCategories: GoalCategory[]
   isActive: boolean
   tags: string[]
+  // ─── F-02 Honest coverage mapping ──
+  /** true = real Ujjivan offering; false = third-party "Other market option" (carries disclosure). */
+  isUjjivanProduct: boolean
+  /** One-line RM pitch read to the client. */
+  rmPitch: string
+  /** Priority rank within category — lower = shown first (admin/campaign controlled, F-12). */
+  priorityRank: number
+  // ─── F-03 Deep dive (recommended vs alternate) ──
+  /** 2–3 short pros, pre-authored for the deep-dive card. */
+  pros: string[]
+  /** 2–3 short cons, pre-authored for the deep-dive card. */
+  cons: string[]
+  /** Default alternate product to show alongside this one. Falls back to next-ranked in category. */
+  alternateProductId?: string
+  /** Account-opening deep link (Ujjivan) or external "Learn more" page (third-party). */
+  ctaLink?: string
+  // ─── F-07 Historical XIRR ──
+  returnHistory: ProductReturnHistory
+  /** Investment term range in months, where applicable (FDs, lock-ins). */
+  termRangeMonths?: { min: number; max: number }
   createdAt: string
   updatedAt: string
 }
@@ -208,6 +241,29 @@ export interface PortfolioRecommendation {
   totalMonthlyRequired: number
   availableSurplus: number
   isAffordable: boolean
+}
+
+// ─── Commitment (F-04) ────────────────────────────────────────────────────────
+
+export type GoalActivationStatus = 'ACTIVATED' | 'DEFERRED'
+
+export interface GoalCommitment {
+  goalId: string
+  status: GoalActivationStatus
+  /** SIP the client actually commits to for this goal (after any lumpsum reduction). */
+  committedMonthlySIP: number
+  /** SIP originally recommended by the plan — kept for committed-vs-recommended in the report. */
+  recommendedMonthlySIP: number
+}
+
+export interface CommitmentRecord {
+  /** Total monthly SIP the client commits to now. */
+  monthlySIPCommitment: number
+  /** Optional lumpsum deployed today. */
+  lumpsum: number
+  goals: GoalCommitment[]
+  status: 'PENDING' | 'COMMITTED' | 'DEFERRED_ALL'
+  committedAt: string | null
 }
 
 // ─── Calculations ───────────────────────────────────────────────────────────

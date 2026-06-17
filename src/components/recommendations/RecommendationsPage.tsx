@@ -1,20 +1,30 @@
 'use client'
 
 import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useUserStore } from '@/store/userStore'
 import { useGoalsStore } from '@/store/goalsStore'
 import { useProductsStore } from '@/store/productsStore'
 import { useRecommendationStore } from '@/store/recommendationStore'
+import { useCommitmentStore } from '@/store/commitmentStore'
 import { useCalculations } from '@/hooks/useCalculations'
 import { buildPortfolioRecommendation } from '@/engine/recommendation.engine'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { RiskBadge, Badge } from '@/components/ui/Badge'
 import { AllocationPieChart } from './AllocationPieChart'
+import { ProductDeepDive, XirrInline } from './ProductDeepDive'
+import { getAlternateProduct } from '@/engine/product.engine'
 import { formatCurrency } from '@/utils/format.utils'
 import type { GoalCategory } from '@/types'
 
 const CURRENT_YEAR = new Date().getFullYear()
+
+// F-09: foundation goals that carry a "Start here" flag (non-negotiable basics).
+const FOUNDATION_CATEGORIES: Set<GoalCategory> = new Set([
+  'LIFE_PROTECTION', 'CRITICAL_ILLNESS', 'FAMILY_HEALTH',
+  'EMERGENCY_FUND', 'RETIREMENT',
+])
 
 const GOAL_TIPS: Partial<Record<GoalCategory, string>> = {
   RETIREMENT: 'Ask when they picture stopping work. Link the SIP to that specific retirement date to make it concrete.',
@@ -54,7 +64,9 @@ export function RecommendationsPage() {
   const userGoals = useGoalsStore(s => s.userGoals)
   const products = useProductsStore(s => s.products)
   const { recommendation, setRecommendation } = useRecommendationStore()
+  const commitment = useCommitmentStore(s => s.commitment)
   const { goalAnalyses } = useCalculations()
+  const router = useRouter()
 
   function generate() {
     if (!profile || userGoals.length === 0) return
@@ -101,8 +113,24 @@ export function RecommendationsPage() {
             For {profile.personal.name} · Age {profile.personal.age} · <RiskBadge tier={recommendation.riskTier} />
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={generate}>Refresh</Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="secondary" size="sm" onClick={generate}>Refresh</Button>
+          <Button size="sm" onClick={() => router.push('/commitment')}>Start your plan →</Button>
+        </div>
       </div>
+
+      {/* F-04: committed-vs-recommended status */}
+      {commitment && commitment.status !== 'PENDING' && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 flex items-center justify-between">
+          <p className="text-sm text-blue-800">
+            {commitment.status === 'DEFERRED_ALL'
+              ? 'Plan generated — activation deferred.'
+              : <>Client committed <strong>{formatCurrency(commitment.monthlySIPCommitment)}/mo</strong>
+                  {commitment.lumpsum > 0 && <> + {formatCurrency(commitment.lumpsum)} lumpsum</>}.</>}
+          </p>
+          <Button variant="ghost" size="sm" onClick={() => router.push('/commitment')}>Edit</Button>
+        </div>
+      )}
 
       {/* Risk override notice */}
       {recommendation.wasRiskOverridden && (
@@ -181,13 +209,30 @@ export function RecommendationsPage() {
             const tip = GOAL_TIPS[goal.category]
             const yearsAway = goal.targetYear - CURRENT_YEAR
 
+            // F-03: primary = highest-allocation product for this goal; alternate resolved from master.
+            const topAlloc = [...gr.allocations].sort((a, b) => b.allocationPercent - a.allocationPercent)[0]
+            const primaryProduct = topAlloc ? products.find(p => p.id === topAlloc.productId) ?? null : null
+            const alternateProduct = primaryProduct ? getAlternateProduct(primaryProduct, products) : null
+
             return (
               <Card key={gr.goalId}>
                 {/* Goal header */}
                 <CardHeader>
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div>
-                      <CardTitle>{goal.name}</CardTitle>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <CardTitle>{goal.name}</CardTitle>
+                        {FOUNDATION_CATEGORIES.has(goal.category) && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                            ★ Start here
+                          </span>
+                        )}
+                      </div>
+                      {goal.currentSavingsForGoal > 0 && (
+                        <p className="text-xs text-emerald-700 mt-1">
+                          Existing: {formatCurrency(goal.currentSavingsForGoal)} corpus already working toward this goal
+                        </p>
+                      )}
                       <p className="text-xs text-slate-500 mt-0.5">
                         Target {formatCurrency(goal.targetAmount)} by {goal.targetYear}
                         {analysis && analysis.inflationAdjustedTarget > goal.targetAmount && (
@@ -237,6 +282,7 @@ export function RecommendationsPage() {
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-slate-900">{product.name}</p>
                               <p className="text-xs text-slate-500">{rationale}</p>
+                              <div className="mt-0.5"><XirrInline product={product} /></div>
                             </div>
                             <div className="shrink-0 text-right">
                               <p className="text-sm font-semibold text-slate-800">{formatCurrency(alloc.monthlyAmount)}</p>
@@ -248,6 +294,11 @@ export function RecommendationsPage() {
                       })}
                     </div>
                   </div>
+                )}
+
+                {/* F-03: Recommended vs Alternate deep dive */}
+                {primaryProduct && (
+                  <ProductDeepDive primary={primaryProduct} alternate={alternateProduct} />
                 )}
 
                 {/* Manager conversation tip */}

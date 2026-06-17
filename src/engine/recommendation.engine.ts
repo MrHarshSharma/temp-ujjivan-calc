@@ -11,6 +11,7 @@ import type {
   UserProfile,
 } from '@/types'
 import { AGE_GROUP_DEFINITIONS } from '@/constants/ageGroups.constants'
+import { formatCurrency } from '@/utils/format.utils'
 import { applyRiskPriorityRule, isRiskCompatible } from './risk.engine'
 
 /** Map age to AgeGroup */
@@ -197,7 +198,7 @@ export function buildPortfolioRecommendation(
       notes.push(`Your risk profile (${user.riskProfile.tier}) is more conservative than typical for age group ${ageGroup}. Recommendations adjusted accordingly.`)
     }
     if (!analysis.isAchievable) {
-      notes.push(`This goal requires ₹${Math.round(totalMonthlySIP).toLocaleString('en-IN')}/month which exceeds your available surplus.`)
+      notes.push(`This goal requires ${formatCurrency(totalMonthlySIP, false)}/month which exceeds your available surplus.`)
     }
 
     return {

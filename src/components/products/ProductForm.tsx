@@ -27,14 +27,51 @@ const RISK_OPTIONS: { value: RiskTier; label: string }[] = [
   { value: 'HIGH', label: 'High (Aggressive)' },
 ]
 
+const COVERAGE_OPTIONS = [
+  { value: 'true', label: 'Ujjivan product' },
+  { value: 'false', label: 'Third-party (Other market option)' },
+]
+
 const ALL_AGE_GROUPS: AgeGroup[] = ['20_30', '30_40', '40_50', '50_PLUS']
 const ALL_GOAL_CATEGORIES: GoalCategory[] = [
   'RETIREMENT', 'EDUCATION', 'MARRIAGE', 'HOME_PURCHASE', 'VEHICLE',
   'TRAVEL', 'EMERGENCY_FUND', 'BUSINESS', 'CHILD_BIRTH', 'MEDICAL_CORPUS', 'CUSTOM',
 ]
 
+/** Parse a textarea (one item per line) into a trimmed string[]. */
+function linesToArray(text: string): string[] {
+  return text.split('\n').map(l => l.trim()).filter(Boolean)
+}
+
+/** Parse an XIRR text input into a number or null (blank/invalid → null). */
+function parseXirr(text: string): number | null {
+  if (text.trim() === '') return null
+  const n = Number(text)
+  return Number.isFinite(n) ? n : null
+}
+
+function Textarea({
+  label, value, onChange, placeholder, hint,
+}: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-sm font-medium text-slate-700">{label}</label>
+      {hint && <p className="text-xs text-slate-400 -mt-0.5">{hint}</p>}
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={3}
+        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      />
+    </div>
+  )
+}
+
 export function ProductForm({ product, onClose }: { product: ProductMaster | null; onClose: () => void }) {
-  const { addProduct, updateProduct } = useProductsStore()
+  const { addProduct, updateProduct, products } = useProductsStore()
 
   const [form, setForm] = useState({
     name: product?.name ?? '',
@@ -48,8 +85,27 @@ export function ProductForm({ product, onClose }: { product: ProductMaster | nul
     suitableAgeGroups: product?.suitableAgeGroups ?? ['20_30', '30_40'] as AgeGroup[],
     suitableGoalCategories: product?.suitableGoalCategories ?? [] as GoalCategory[],
     isActive: product?.isActive ?? true,
+    // F-02 / F-03 / F-07 fields
+    isUjjivanProduct: product?.isUjjivanProduct ?? true,
+    rmPitch: product?.rmPitch ?? '',
+    priorityRank: product?.priorityRank ?? 1,
+    pros: (product?.pros ?? []).join('\n'),
+    cons: (product?.cons ?? []).join('\n'),
+    alternateProductId: product?.alternateProductId ?? '',
+    ctaLink: product?.ctaLink ?? '',
+    xirr3yr: product?.returnHistory?.xirr3yr != null ? String(product.returnHistory.xirr3yr) : '',
+    xirr5yr: product?.returnHistory?.xirr5yr != null ? String(product.returnHistory.xirr5yr) : '',
+    xirr10yr: product?.returnHistory?.xirr10yr != null ? String(product.returnHistory.xirr10yr) : '',
+    xirrAsOf: product?.returnHistory?.asOf ?? '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const alternateOptions = [
+    { value: '', label: '— Auto (next-ranked in category) —' },
+    ...products
+      .filter(p => p.id !== product?.id)
+      .map(p => ({ value: p.id, label: p.name })),
+  ]
 
   function toggleAgeGroup(ag: AgeGroup) {
     setForm(f => ({
@@ -74,16 +130,50 @@ export function ProductForm({ product, onClose }: { product: ProductMaster | nul
     if (!form.name.trim()) e.name = 'Product name is required'
     if (form.expectedReturnPercent < 0) e.expectedReturnPercent = 'Return cannot be negative'
     if (form.suitableGoalCategories.length === 0) e.goals = 'Select at least one goal category'
+    if (!form.rmPitch.trim()) e.rmPitch = 'RM pitch is required'
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
   function handleSubmit() {
     if (!validate()) return
+
+    const xirr3yr = parseXirr(form.xirr3yr)
+    const xirr5yr = parseXirr(form.xirr5yr)
+    const xirr10yr = parseXirr(form.xirr10yr)
+    const hasAnyXirr = xirr3yr !== null || xirr5yr !== null || xirr10yr !== null
+
+    const payload = {
+      name: form.name,
+      category: form.category,
+      description: form.description,
+      minInvestment: form.minInvestment,
+      expectedReturnPercent: form.expectedReturnPercent,
+      riskTier: form.riskTier,
+      liquidityScore: form.liquidityScore,
+      taxEfficiency: form.taxEfficiency,
+      suitableAgeGroups: form.suitableAgeGroups,
+      suitableGoalCategories: form.suitableGoalCategories,
+      isActive: form.isActive,
+      isUjjivanProduct: form.isUjjivanProduct,
+      rmPitch: form.rmPitch.trim(),
+      priorityRank: form.priorityRank,
+      pros: linesToArray(form.pros),
+      cons: linesToArray(form.cons),
+      alternateProductId: form.alternateProductId || undefined,
+      ctaLink: form.ctaLink.trim() || undefined,
+      returnHistory: {
+        xirr3yr,
+        xirr5yr,
+        xirr10yr,
+        asOf: hasAnyXirr ? (form.xirrAsOf.trim() || null) : null,
+      },
+    }
+
     if (product) {
-      updateProduct(product.id, form)
+      updateProduct(product.id, payload)
     } else {
-      addProduct({ ...form, tags: [] })
+      addProduct({ ...payload, tags: [] })
     }
     onClose()
   }
@@ -113,6 +203,7 @@ export function ProductForm({ product, onClose }: { product: ProductMaster | nul
           value={form.description}
           onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
         />
+
         <div className="grid grid-cols-2 gap-3">
           <Select
             label="Category"
@@ -127,6 +218,30 @@ export function ProductForm({ product, onClose }: { product: ProductMaster | nul
             onChange={e => setForm(f => ({ ...f, riskTier: e.target.value as RiskTier }))}
           />
         </div>
+
+        {/* F-02 coverage mapping */}
+        <div className="grid grid-cols-2 gap-3">
+          <Select
+            label="Coverage"
+            options={COVERAGE_OPTIONS}
+            value={String(form.isUjjivanProduct)}
+            onChange={e => setForm(f => ({ ...f, isUjjivanProduct: e.target.value === 'true' }))}
+          />
+          <Input
+            label="Priority Rank"
+            type="number"
+            value={form.priorityRank}
+            onChange={e => setForm(f => ({ ...f, priorityRank: Number(e.target.value) }))}
+          />
+        </div>
+
+        <Input
+          label="RM Pitch (one line read to the client)"
+          value={form.rmPitch}
+          onChange={e => setForm(f => ({ ...f, rmPitch: e.target.value }))}
+          error={errors.rmPitch}
+        />
+
         <div className="grid grid-cols-3 gap-3">
           <Input
             label="Expected Return"
@@ -155,6 +270,44 @@ export function ProductForm({ product, onClose }: { product: ProductMaster | nul
             />
             <span className="text-xs text-slate-500 text-center">{form.liquidityScore} / 5</span>
           </div>
+        </div>
+
+        {/* F-07 Historical XIRR — leave blank for protection products (shows N/A) */}
+        <div>
+          <p className="text-sm font-medium text-slate-700 mb-1">Historical XIRR (%) — leave blank for protection products</p>
+          <div className="grid grid-cols-4 gap-3">
+            <Input label="3-yr" type="number" value={form.xirr3yr}
+              onChange={e => setForm(f => ({ ...f, xirr3yr: e.target.value }))} suffix="%" />
+            <Input label="5-yr" type="number" value={form.xirr5yr}
+              onChange={e => setForm(f => ({ ...f, xirr5yr: e.target.value }))} suffix="%" />
+            <Input label="10-yr" type="number" value={form.xirr10yr}
+              onChange={e => setForm(f => ({ ...f, xirr10yr: e.target.value }))} suffix="%" />
+            <Input label="As of" value={form.xirrAsOf} placeholder="2026-03"
+              onChange={e => setForm(f => ({ ...f, xirrAsOf: e.target.value }))} />
+          </div>
+        </div>
+
+        {/* F-03 deep-dive content */}
+        <div className="grid grid-cols-2 gap-3">
+          <Textarea label="Pros (one per line)" value={form.pros}
+            onChange={v => setForm(f => ({ ...f, pros: v }))} placeholder={'Tax-free returns\nSovereign guarantee'} />
+          <Textarea label="Cons (one per line)" value={form.cons}
+            onChange={v => setForm(f => ({ ...f, cons: v }))} placeholder={'15-year lock-in\nContribution cap'} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Select
+            label="Default Alternate Product"
+            options={alternateOptions}
+            value={form.alternateProductId}
+            onChange={e => setForm(f => ({ ...f, alternateProductId: e.target.value }))}
+          />
+          <Input
+            label="CTA Link (account-opening / learn-more URL)"
+            value={form.ctaLink}
+            onChange={e => setForm(f => ({ ...f, ctaLink: e.target.value }))}
+            placeholder="https://…"
+          />
         </div>
 
         <div>

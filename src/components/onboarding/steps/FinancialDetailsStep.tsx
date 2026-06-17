@@ -8,6 +8,7 @@ import { useUserStore } from '@/store/userStore'
 import type { ExistingInvestment, FinancialDetails } from '@/types'
 import { DEFAULT_RATES } from '@/constants/defaults.constants'
 import { formatCurrency } from '@/utils/format.utils'
+import { getPeerBenchmark, compareToPeerAverage } from '@/engine/benchmark.engine'
 
 export function FinancialDetailsStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const profile = useUserStore(s => s.profile)
@@ -25,6 +26,17 @@ export function FinancialDetailsStep({ onNext, onBack }: { onNext: () => void; o
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const surplus = form.monthlyIncome - form.monthlyExpenses
+
+  // F-01: advisory surplus nudge vs peers in the same age band.
+  const age = profile?.personal.age ?? 0
+  const surplusPct = form.monthlyIncome > 0 ? Math.round((surplus / form.monthlyIncome) * 100) : 0
+  const peerBenchmark = age > 0 ? getPeerBenchmark(age) : null
+  const nudgeTone = peerBenchmark ? compareToPeerAverage(surplusPct, peerBenchmark.avgSurplusPctOfIncome) : null
+  const NUDGE_STYLES = {
+    green: 'bg-green-50 text-green-700 border-green-200',
+    amber: 'bg-amber-50 text-amber-800 border-amber-200',
+    red: 'bg-red-50 text-red-700 border-red-200',
+  } as const
 
   function validate(): boolean {
     const e: Record<string, string> = {}
@@ -96,6 +108,14 @@ export function FinancialDetailsStep({ onNext, onBack }: { onNext: () => void; o
       {form.monthlyIncome > 0 && form.monthlyExpenses > 0 && (
         <div className={`rounded-lg p-3 text-sm font-medium ${surplus > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
           Monthly surplus: {formatCurrency(surplus, false)} ({surplus > 0 ? 'available for goals' : 'deficit — please review'})
+        </div>
+      )}
+
+      {/* F-01: peer surplus nudge (advisory) */}
+      {form.monthlyIncome > 0 && surplus > 0 && peerBenchmark && nudgeTone && (
+        <div className={`rounded-lg border px-3 py-2 text-xs ${NUDGE_STYLES[nudgeTone]}`}>
+          Peers your age invest on average <strong>{peerBenchmark.avgSurplusPctOfIncome}%</strong> of monthly income.
+          You currently have <strong>{surplusPct}%</strong> as investable surplus.
         </div>
       )}
 

@@ -6,6 +6,7 @@ import { RiskBadge } from '@/components/ui/Badge'
 import { useUserStore } from '@/store/userStore'
 import { useRiskStore } from '@/store/riskStore'
 import { scoreQuestionnaire, resolveRiskTier } from '@/engine/risk.engine'
+import { PeerBenchmarkPanel } from '../PeerBenchmarkPanel'
 import type { RiskAnswer, RiskProfile, RiskTier } from '@/types'
 
 type Mode = 'pick' | 'questionnaire'
@@ -123,6 +124,12 @@ export function RiskAssessmentStep({ onNext, onBack }: { onNext: () => void; onB
           )}
         </div>
       )}
+
+      {/* F-01: advisory peer benchmark reflecting the current selection */}
+      <PeerBenchmarkPanel
+        age={profile?.personal.age ?? 0}
+        tier={mode === 'pick' ? selectedTier : resolvedTier}
+      />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

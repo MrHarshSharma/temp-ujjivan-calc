@@ -6,15 +6,18 @@ import { useGoalsStore } from '@/store/goalsStore'
 import { useProductsStore } from '@/store/productsStore'
 import { useRiskStore } from '@/store/riskStore'
 import { useRecommendationStore } from '@/store/recommendationStore'
-import type { ProductMaster } from '@/types'
+import { useCommitmentStore } from '@/store/commitmentStore'
+import type { CommitmentRecord, ProductMaster } from '@/types'
 
-const STORAGE_VERSION = 1
+// v2: ProductMaster gained F-02/F-03/F-07 fields — bump so cached v1 products reseed.
+const STORAGE_VERSION = 2
 const KEYS = {
   user: 'fp:user',
   goals: 'fp:goals',
   products: 'fp:products',
   risk: 'fp:risk',
   reco: 'fp:reco',
+  commitment: 'fp:commitment',
 }
 
 function save(key: string, data: unknown) {
@@ -48,6 +51,7 @@ export function usePersistence() {
   const productsStore = useProductsStore
   const riskStore = useRiskStore
   const recoStore = useRecommendationStore
+  const commitmentStore = useCommitmentStore
 
   // Hydrate on mount
   useEffect(() => {
@@ -70,6 +74,11 @@ export function usePersistence() {
     if (recoData) {
       useRecommendationStore.setState(prev => ({ ...prev, ...recoData }))
     }
+
+    const commitmentData = load<{ commitment: CommitmentRecord | null }>(KEYS.commitment)
+    if (commitmentData) {
+      useCommitmentStore.setState(prev => ({ ...prev, commitment: commitmentData.commitment }))
+    }
   }, [])
 
   // Subscribe and persist on change
@@ -86,7 +95,8 @@ export function usePersistence() {
         recommendation: state.recommendation,
         lastGeneratedAt: state.lastGeneratedAt,
       })),
+      commitmentStore.subscribe((state) => save(KEYS.commitment, { commitment: state.commitment })),
     ]
     return () => unsubs.forEach(u => u())
-  }, [userStore, goalsStore, productsStore, riskStore, recoStore])
+  }, [userStore, goalsStore, productsStore, riskStore, recoStore, commitmentStore])
 }
