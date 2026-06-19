@@ -1,4 +1,4 @@
-import type { AgeGroup, RiskTier } from '@/types'
+import type { RiskTier } from '@/types'
 import { PEER_BENCHMARKS, type PeerBenchmark } from '@/constants/peerBenchmark.constants'
 import { getAgeGroup } from './recommendation.engine'
 

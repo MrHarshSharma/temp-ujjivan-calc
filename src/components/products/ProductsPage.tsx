@@ -7,8 +7,8 @@ import { RiskBadge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { ProductForm } from './ProductForm'
 import type { ProductCategory, ProductMaster, ProductReturnHistory } from '@/types'
-import { formatPercent } from '@/utils/format.utils'
-import { hasXirr } from '@/engine/product.engine'
+import { formatPercent, formatMonthYear } from '@/utils/format.utils'
+import { hasXirr, isSinceInceptionOnly } from '@/engine/product.engine'
 
 const CATEGORY_CONFIG: Record<ProductCategory, { label: string; color: string }> = {
   MUTUAL_FUND:   { label: 'Mutual Fund',  color: 'bg-blue-50 text-blue-700 border-blue-200' },
@@ -34,12 +34,20 @@ function XirrRow({ history }: { history: ProductReturnHistory }) {
   if (!hasXirr(history)) {
     return <p className="text-[11px] text-slate-400 mt-1">XIRR: N/A — protection product</p>
   }
+  if (isSinceInceptionOnly(history)) {
+    return (
+      <p className="text-[11px] text-slate-500 mt-1 font-medium">
+        Since inception: {history.xirrSinceInception!.toFixed(1)}%
+        {history.inceptionDate && <span className="text-slate-400 font-normal"> · since {formatMonthYear(history.inceptionDate)}</span>}
+      </p>
+    )
+  }
   const cell = (label: string, v: number | null) =>
     `${label}: ${v != null ? `${v.toFixed(1)}%` : '—'}`
   return (
     <p className="text-[11px] text-slate-500 mt-1 font-medium">
       {cell('3yr', history.xirr3yr)} · {cell('5yr', history.xirr5yr)} · {cell('10yr', history.xirr10yr)}
-      {history.asOf && <span className="text-slate-400 font-normal"> · as of {history.asOf}</span>}
+      {history.asOf && <span className="text-slate-400 font-normal"> · as of {formatMonthYear(history.asOf)}</span>}
     </p>
   )
 }

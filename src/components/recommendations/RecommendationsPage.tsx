@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUserStore } from '@/store/userStore'
 import { useGoalsStore } from '@/store/goalsStore'
@@ -8,7 +8,7 @@ import { useProductsStore } from '@/store/productsStore'
 import { useRecommendationStore } from '@/store/recommendationStore'
 import { useCommitmentStore } from '@/store/commitmentStore'
 import { useCalculations } from '@/hooks/useCalculations'
-import { buildPortfolioRecommendation } from '@/engine/recommendation.engine'
+import { buildPortfolioRecommendation, computeCrossGoalSplits, applySplitOverride } from '@/engine/recommendation.engine'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { RiskBadge, Badge } from '@/components/ui/Badge'
@@ -16,7 +16,7 @@ import { AllocationPieChart } from './AllocationPieChart'
 import { ProductDeepDive, XirrInline } from './ProductDeepDive'
 import { getAlternateProduct } from '@/engine/product.engine'
 import { formatCurrency } from '@/utils/format.utils'
-import type { GoalCategory } from '@/types'
+import type { GoalCategory, CrossGoalProductSplit } from '@/types'
 
 const CURRENT_YEAR = new Date().getFullYear()
 
@@ -59,6 +59,65 @@ const PRODUCT_RATIONALE: Partial<Record<string, string>> = {
   INSURANCE: 'Term cover to protect the entire financial plan if income stops unexpectedly.',
 }
 
+/**
+ * F-09: shows how a shared product's monthly corpus splits across goals (by
+ * priority) and lets the RM override this goal's share. Total is conserved.
+ */
+function CrossGoalSplit({
+  split,
+  currentGoalId,
+  onOverride,
+}: {
+  split: CrossGoalProductSplit
+  currentGoalId: string
+  onOverride: (goalId: string, percent: number) => void
+}) {
+  const current = split.goals.find(g => g.goalId === currentGoalId)
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState(current?.percent ?? 0)
+
+  return (
+    <div className="rounded-md border border-indigo-100 bg-indigo-50/60 px-2.5 py-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] text-indigo-800">
+          <span className="font-semibold">Shared across goals</span> · split by priority:{' '}
+          {split.goals.map((g, i) => (
+            <span key={g.goalId}>
+              {i > 0 && ' · '}
+              <span className={g.goalId === currentGoalId ? 'font-semibold' : ''}>{g.percent}% {g.goalName}</span>
+            </span>
+          ))}
+        </p>
+        <button
+          type="button"
+          onClick={() => { setVal(current?.percent ?? 0); setEditing(e => !e) }}
+          className="text-[11px] font-medium text-indigo-600 shrink-0"
+        >
+          {editing ? 'Cancel' : 'Adjust split'}
+        </button>
+      </div>
+      {editing && (
+        <div className="flex items-center gap-2 mt-1.5">
+          <span className="text-[11px] text-slate-600 shrink-0">This goal&apos;s share</span>
+          <input
+            type="range" min={0} max={100} value={val}
+            onChange={e => setVal(Number(e.target.value))}
+            className="flex-1 accent-indigo-600"
+          />
+          <span className="text-[11px] font-semibold w-9 text-right">{val}%</span>
+          <button
+            type="button"
+            onClick={() => { onOverride(currentGoalId, val); setEditing(false) }}
+            className="text-[11px] bg-indigo-600 text-white px-2 py-0.5 rounded font-medium"
+          >
+            Apply
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function RecommendationsPage() {
   const profile = useUserStore(s => s.profile)
   const userGoals = useGoalsStore(s => s.userGoals)
@@ -67,6 +126,7 @@ export function RecommendationsPage() {
   const commitment = useCommitmentStore(s => s.commitment)
   const { goalAnalyses } = useCalculations()
   const router = useRouter()
+  const lastGoalCount = useRef<number | null>(null)
 
   function generate() {
     if (!profile || userGoals.length === 0) return
@@ -74,11 +134,21 @@ export function RecommendationsPage() {
     setRecommendation(reco)
   }
 
-  // Auto-generate on mount and when goals change
+  // Generate when there's no plan yet, or when the goal set changes within a
+  // session. A persisted plan is preserved across navigation so F-09 split
+  // overrides survive — use "Refresh" to rebuild from scratch.
   useEffect(() => {
-    generate()
+    const goalCountChanged = lastGoalCount.current !== null && lastGoalCount.current !== userGoals.length
+    if (!recommendation || goalCountChanged) generate()
+    lastGoalCount.current = userGoals.length
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, userGoals.length])
+
+  // F-09: apply an RM override to a shared product's cross-goal split.
+  function handleSplitOverride(productId: string, goalId: string, percent: number) {
+    if (!recommendation) return
+    setRecommendation(applySplitOverride(recommendation, productId, goalId, percent))
+  }
 
   if (!profile) {
     return (
@@ -102,6 +172,12 @@ export function RecommendationsPage() {
     )
   }
 
+  // F-09: products that fund 2+ goals, keyed by product id, for the split display.
+  const splitsByProduct = new Map<string, CrossGoalProductSplit>()
+  for (const s of computeCrossGoalSplits(recommendation.goalRecommendations, userGoals)) {
+    splitsByProduct.set(s.productId, s)
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-5">
 
@@ -115,6 +191,7 @@ export function RecommendationsPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Button variant="secondary" size="sm" onClick={generate}>Refresh</Button>
+          <Button variant="secondary" size="sm" onClick={() => router.push('/report')}>Report</Button>
           <Button size="sm" onClick={() => router.push('/commitment')}>Start your plan →</Button>
         </div>
       </div>
@@ -264,31 +341,58 @@ export function RecommendationsPage() {
                 {gr.allocations.length > 0 && (
                   <div className="mb-3">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Products to recommend</p>
+
+                    {/* F-09: per-goal SIP breakdown across products */}
+                    {gr.allocations.length > 1 && (
+                      <p className="text-[11px] text-slate-500 mb-2">
+                        {formatCurrency(gr.totalMonthlySIP)}/mo —{' '}
+                        {gr.allocations.map((a, i) => {
+                          const p = products.find(pr => pr.id === a.productId)
+                          return (
+                            <span key={a.productId}>
+                              {i > 0 && ' + '}
+                              <span className="text-slate-700 font-medium">{formatCurrency(a.monthlyAmount)}</span> via {p?.name ?? 'product'}
+                            </span>
+                          )
+                        })}
+                      </p>
+                    )}
+
                     <div className="flex flex-col gap-2">
                       {gr.allocations.map(alloc => {
                         const product = products.find(p => p.id === alloc.productId)
                         if (!product) return null
                         const rationale = PRODUCT_RATIONALE[product.category] ?? alloc.rationale
+                        const split = splitsByProduct.get(alloc.productId)
                         return (
-                          <div key={alloc.productId} className="flex items-center gap-3 bg-slate-50 rounded-lg px-3 py-2.5">
-                            <div className="w-10 text-right shrink-0">
-                              <span className="text-sm font-bold text-slate-700">{alloc.allocationPercent}%</span>
-                            </div>
-                            <div className="w-24 shrink-0">
-                              <div className="bg-slate-200 rounded-full h-1.5">
-                                <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${alloc.allocationPercent}%` }} />
+                          <div key={alloc.productId} className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-3 bg-slate-50 rounded-lg px-3 py-2.5">
+                              <div className="w-10 text-right shrink-0">
+                                <span className="text-sm font-bold text-slate-700">{alloc.allocationPercent}%</span>
                               </div>
+                              <div className="w-24 shrink-0">
+                                <div className="bg-slate-200 rounded-full h-1.5">
+                                  <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${alloc.allocationPercent}%` }} />
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-900">{product.name}</p>
+                                <p className="text-xs text-slate-500">{rationale}</p>
+                                <div className="mt-0.5"><XirrInline product={product} /></div>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <p className="text-sm font-semibold text-slate-800">{formatCurrency(alloc.monthlyAmount)}</p>
+                                <p className="text-xs text-slate-400">per month</p>
+                              </div>
+                              {alloc.isRiskOverride && <Badge variant="warning">Adjusted</Badge>}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-900">{product.name}</p>
-                              <p className="text-xs text-slate-500">{rationale}</p>
-                              <div className="mt-0.5"><XirrInline product={product} /></div>
-                            </div>
-                            <div className="shrink-0 text-right">
-                              <p className="text-sm font-semibold text-slate-800">{formatCurrency(alloc.monthlyAmount)}</p>
-                              <p className="text-xs text-slate-400">per month</p>
-                            </div>
-                            {alloc.isRiskOverride && <Badge variant="warning">Adjusted</Badge>}
+                            {split && (
+                              <CrossGoalSplit
+                                split={split}
+                                currentGoalId={gr.goalId}
+                                onOverride={(goalId, pct) => handleSplitOverride(alloc.productId, goalId, pct)}
+                              />
+                            )}
                           </div>
                         )
                       })}

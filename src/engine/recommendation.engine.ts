@@ -1,5 +1,6 @@
 import type {
   AgeGroup,
+  CrossGoalProductSplit,
   GoalAnalysis,
   GoalCategory,
   GoalRecommendation,
@@ -243,4 +244,131 @@ export function buildPortfolioRecommendation(
     availableSurplus,
     isAffordable: totalMonthlyRequired <= availableSurplus,
   }
+}
+
+// ─── F-09: cross-goal corpus split ────────────────────────────────────────────
+
+/**
+ * Priority order used to rank goals when one product is split across several
+ * (spec: Insurance > Emergency > Retirement > Education > Assets > Lifestyle).
+ * Lower number = higher priority = larger share shown first.
+ */
+const GOAL_CATEGORY_PRIORITY: Record<GoalCategory, number> = {
+  LIFE_PROTECTION: 0, CRITICAL_ILLNESS: 0, FAMILY_HEALTH: 0, MEDICAL_CORPUS: 0,
+  EMERGENCY_FUND: 1,
+  RETIREMENT: 2,
+  EDUCATION: 3, CHILD_BIRTH: 3,
+  HOME_PURCHASE: 4, REAL_ESTATE: 4, VEHICLE: 4, BUSINESS: 4, GOLD_PURCHASE: 4, LOAN_FORECLOSURE: 4,
+  TRAVEL: 5, MARRIAGE: 5, CHILDS_MARRIAGE: 5, OWN_MARRIAGE: 5,
+  SABBATICAL: 5, CHARITY: 5, LEGACY_INHERITANCE: 5, CUSTOM: 5,
+}
+
+/** Rank a goal for cross-goal splits: explicit priority first, then category order. */
+export function goalPriorityRank(goal: UserGoal): number {
+  const tier = { HIGH: 0, MEDIUM: 1, LOW: 2 }[goal.priority]
+  return tier * 100 + (GOAL_CATEGORY_PRIORITY[goal.category] ?? 99)
+}
+
+/**
+ * F-09: for every product that funds two or more goals, compute how its total
+ * monthly corpus divides across those goals, sorted by goal priority.
+ */
+export function computeCrossGoalSplits(
+  goalRecommendations: GoalRecommendation[],
+  goals: UserGoal[]
+): CrossGoalProductSplit[] {
+  const byProduct = new Map<string, { goalId: string; amount: number }[]>()
+  for (const gr of goalRecommendations) {
+    for (const a of gr.allocations) {
+      if (!byProduct.has(a.productId)) byProduct.set(a.productId, [])
+      byProduct.get(a.productId)!.push({ goalId: gr.goalId, amount: a.monthlyAmount })
+    }
+  }
+
+  const splits: CrossGoalProductSplit[] = []
+  for (const [productId, entries] of byProduct) {
+    if (entries.length < 2) continue
+    const total = entries.reduce((s, e) => s + e.amount, 0)
+    if (total <= 0) continue
+
+    const ranked = entries
+      .map(e => {
+        const goal = goals.find(g => g.id === e.goalId)
+        return {
+          goalId: e.goalId,
+          goalName: goal?.name ?? 'Goal',
+          monthlyAmount: e.amount,
+          percent: Math.round((e.amount / total) * 100),
+          rank: goal ? goalPriorityRank(goal) : 999,
+        }
+      })
+      .sort((a, b) => a.rank - b.rank)
+
+    splits.push({
+      productId,
+      totalMonthly: total,
+      goals: ranked.map(g => ({
+        goalId: g.goalId,
+        goalName: g.goalName,
+        monthlyAmount: g.monthlyAmount,
+        percent: g.percent,
+      })),
+    })
+  }
+  return splits
+}
+
+/**
+ * F-09: RM override of a product's split. Sets `goalId`'s share of the product
+ * to `newPercent` and redistributes the rest across the product's other goals
+ * proportionally. The product's total monthly amount is conserved, so the
+ * overall plan total is unchanged — only per-goal SIPs shift.
+ */
+export function applySplitOverride(
+  rec: PortfolioRecommendation,
+  productId: string,
+  goalId: string,
+  newPercent: number
+): PortfolioRecommendation {
+  const pct = Math.max(0, Math.min(100, Math.round(newPercent)))
+  const entries = rec.goalRecommendations
+    .map(gr => ({ goalId: gr.goalId, alloc: gr.allocations.find(a => a.productId === productId) }))
+    .filter((x): x is { goalId: string; alloc: ProductAllocation } => !!x.alloc)
+
+  const total = entries.reduce((s, e) => s + e.alloc.monthlyAmount, 0)
+  if (entries.length < 2 || total <= 0) return rec
+
+  const others = entries.filter(e => e.goalId !== goalId)
+  const othersTotal = others.reduce((s, e) => s + e.alloc.monthlyAmount, 0)
+  const targetAmount = (pct / 100) * total
+  const remaining = total - targetAmount
+
+  const next: PortfolioRecommendation = JSON.parse(JSON.stringify(rec))
+  for (const gr of next.goalRecommendations) {
+    const alloc = gr.allocations.find(a => a.productId === productId)
+    if (!alloc) continue
+    if (gr.goalId === goalId) {
+      alloc.monthlyAmount = targetAmount
+    } else {
+      const prev = rec.goalRecommendations
+        .find(g => g.goalId === gr.goalId)!
+        .allocations.find(a => a.productId === productId)!.monthlyAmount
+      const share = othersTotal > 0 ? prev / othersTotal : 1 / others.length
+      alloc.monthlyAmount = remaining * share
+    }
+  }
+
+  // Recompute totals + within-goal percentages for every affected goal.
+  for (const gr of next.goalRecommendations) {
+    if (!gr.allocations.some(a => a.productId === productId)) continue
+    const goalTotal = gr.allocations.reduce((s, a) => s + a.monthlyAmount, 0)
+    gr.totalMonthlySIP = goalTotal
+    gr.allocations.forEach(a => {
+      a.allocationPercent = goalTotal > 0 ? Math.round((a.monthlyAmount / goalTotal) * 100) : 0
+    })
+  }
+
+  next.totalMonthlyRequired = next.goalRecommendations.reduce((s, g) => s + g.totalMonthlySIP, 0)
+  next.isAffordable = next.totalMonthlyRequired <= next.availableSurplus
+  return next
 }

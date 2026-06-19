@@ -96,6 +96,8 @@ export function ProductForm({ product, onClose }: { product: ProductMaster | nul
     xirr3yr: product?.returnHistory?.xirr3yr != null ? String(product.returnHistory.xirr3yr) : '',
     xirr5yr: product?.returnHistory?.xirr5yr != null ? String(product.returnHistory.xirr5yr) : '',
     xirr10yr: product?.returnHistory?.xirr10yr != null ? String(product.returnHistory.xirr10yr) : '',
+    xirrSinceInception: product?.returnHistory?.xirrSinceInception != null ? String(product.returnHistory.xirrSinceInception) : '',
+    inceptionDate: product?.returnHistory?.inceptionDate ?? '',
     xirrAsOf: product?.returnHistory?.asOf ?? '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -141,7 +143,8 @@ export function ProductForm({ product, onClose }: { product: ProductMaster | nul
     const xirr3yr = parseXirr(form.xirr3yr)
     const xirr5yr = parseXirr(form.xirr5yr)
     const xirr10yr = parseXirr(form.xirr10yr)
-    const hasAnyXirr = xirr3yr !== null || xirr5yr !== null || xirr10yr !== null
+    const xirrSinceInception = parseXirr(form.xirrSinceInception)
+    const hasAnyXirr = xirr3yr !== null || xirr5yr !== null || xirr10yr !== null || xirrSinceInception !== null
 
     const payload = {
       name: form.name,
@@ -166,6 +169,8 @@ export function ProductForm({ product, onClose }: { product: ProductMaster | nul
         xirr3yr,
         xirr5yr,
         xirr10yr,
+        xirrSinceInception,
+        inceptionDate: form.inceptionDate.trim() || null,
         asOf: hasAnyXirr ? (form.xirrAsOf.trim() || null) : null,
       },
     }
@@ -284,6 +289,10 @@ export function ProductForm({ product, onClose }: { product: ProductMaster | nul
               onChange={e => setForm(f => ({ ...f, xirr10yr: e.target.value }))} suffix="%" />
             <Input label="As of" value={form.xirrAsOf} placeholder="2026-03"
               onChange={e => setForm(f => ({ ...f, xirrAsOf: e.target.value }))} />
+            <Input label="Since inception" type="number" value={form.xirrSinceInception}
+              onChange={e => setForm(f => ({ ...f, xirrSinceInception: e.target.value }))} suffix="%" />
+            <Input label="Launched" value={form.inceptionDate} placeholder="2024-06"
+              onChange={e => setForm(f => ({ ...f, inceptionDate: e.target.value }))} />
           </div>
         </div>
 

@@ -170,6 +170,10 @@ export interface ProductReturnHistory {
   xirr3yr: number | null
   xirr5yr: number | null
   xirr10yr: number | null
+  /** F-07: return since launch, shown for funds too new for a 3yr number. */
+  xirrSinceInception?: number | null
+  /** F-07: launch month "YYYY-MM" — shown with the since-inception return. */
+  inceptionDate?: string | null
   /** Data-as-of label, e.g. "2026-03" — always shown next to XIRR to flag stale data. */
   asOf: string | null
 }
@@ -230,6 +234,22 @@ export interface GoalRecommendation {
   notes: string[]
 }
 
+/** F-09: how one product's monthly corpus divides across the goals it serves. */
+export interface GoalSplitEntry {
+  goalId: string
+  goalName: string
+  monthlyAmount: number
+  /** This goal's share of the product's total monthly amount (0–100). */
+  percent: number
+}
+
+export interface CrossGoalProductSplit {
+  productId: string
+  totalMonthly: number
+  /** Goals this product funds, sorted by priority (highest first). */
+  goals: GoalSplitEntry[]
+}
+
 export interface PortfolioRecommendation {
   userId: string
   generatedAt: string
@@ -264,6 +284,45 @@ export interface CommitmentRecord {
   goals: GoalCommitment[]
   status: 'PENDING' | 'COMMITTED' | 'DEFERRED_ALL'
   committedAt: string | null
+}
+
+// ─── Plan Versioning (F-11) ───────────────────────────────────────────────────
+
+/** A point-in-time snapshot of a client's plan, stored alongside each generated report. */
+export interface PlanSnapshotGoal {
+  id: string
+  name: string
+  category: GoalCategory
+  targetAmount: number
+  targetYear: number
+  requiredMonthlySIP: number
+  products: string[]
+}
+
+export interface PlanSnapshot {
+  clientId: string
+  clientName: string
+  generatedAt: string
+  monthlyIncome: number
+  monthlyExpenses: number
+  riskTier: RiskTier
+  goals: PlanSnapshotGoal[]
+  totalMonthlySIP: number
+  committedMonthlySIP: number | null
+  lumpsum: number | null
+  commitmentStatus: CommitmentRecord['status'] | null
+}
+
+export interface PlanVersion {
+  version: number
+  snapshot: PlanSnapshot
+}
+
+/** One field-level change between two plan versions, for the change log. */
+export interface PlanChange {
+  label: string
+  oldValue: string
+  newValue: string
 }
 
 // ─── Calculations ───────────────────────────────────────────────────────────

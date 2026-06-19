@@ -9,8 +9,8 @@ import { useRecommendationStore } from '@/store/recommendationStore'
 import { useCommitmentStore } from '@/store/commitmentStore'
 import type { CommitmentRecord, ProductMaster } from '@/types'
 
-// v2: ProductMaster gained F-02/F-03/F-07 fields — bump so cached v1 products reseed.
-const STORAGE_VERSION = 2
+// v3: F-07 added since-inception XIRR fields + a new-fund product — bump so cached products reseed.
+const STORAGE_VERSION = 3
 const KEYS = {
   user: 'fp:user',
   goals: 'fp:goals',

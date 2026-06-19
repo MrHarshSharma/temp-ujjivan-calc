@@ -39,6 +39,23 @@ export function formatCurrencyWithShorthand(amount: number): string {
   return `${full} (₹${shorthandINR(amount)})`
 }
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+/**
+ * F-07: render a "YYYY-MM" data-as-of label as "Month Year" (e.g. "2026-03" → "March 2026").
+ * Returns the input unchanged if it is not in the expected format.
+ */
+export function formatMonthYear(asOf: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(asOf)
+  if (!m) return asOf
+  const monthIdx = parseInt(m[2], 10) - 1
+  if (monthIdx < 0 || monthIdx > 11) return asOf
+  return `${MONTH_NAMES[monthIdx]} ${m[1]}`
+}
+
 /** Format a percentage with 1 decimal place */
 export function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`

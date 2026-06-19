@@ -79,6 +79,7 @@ export function CommitmentPage() {
   }
 
   function confirm() {
+    if (!profile) return
     const goals: GoalCommitment[] = grs.map(gr => ({
       goalId: gr.goalId,
       status: activation[gr.goalId] ? 'ACTIVATED' : 'DEFERRED',
@@ -92,6 +93,12 @@ export function CommitmentPage() {
       status: anyActivated ? 'COMMITTED' : 'DEFERRED_ALL',
       committedAt: new Date().toISOString(),
     })
+    // F-12: log activation outcome for admin analytics (fire-and-forget).
+    fetch('/api/session-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: profile.id, event: anyActivated ? 'activated' : 'deferred' }),
+    }).catch(() => {})
     router.push('/recommendations')
   }
 

@@ -1,13 +1,23 @@
 'use client'
 
 import type { ProductMaster } from '@/types'
-import { hasXirr } from '@/engine/product.engine'
+import { isProtectionProduct, isSinceInceptionOnly, THIRD_PARTY_DISCLOSURE } from '@/engine/product.engine'
+import { formatMonthYear } from '@/utils/format.utils'
 
-/** F-07: compact XIRR row — "3yr 15.2% · 5yr 13.8% · 10yr 12.5% · as of 2026-03". */
+/** F-07: compact XIRR row — "3yr 15.2% · 5yr 13.8% · 10yr 12.5% · as of March 2026". */
 export function XirrInline({ product }: { product: ProductMaster }) {
   const h = product.returnHistory
-  if (!hasXirr(h)) {
-    return <span className="text-[11px] text-slate-400">XIRR N/A — protection product</span>
+  if (isProtectionProduct(product)) {
+    return <span className="text-[11px] text-slate-400">N/A — protection product</span>
+  }
+  // F-07: too new for a 3yr number — show since-inception return with launch date.
+  if (isSinceInceptionOnly(h)) {
+    return (
+      <span className="text-[11px] text-slate-500 font-medium">
+        Since inception {h.xirrSinceInception!.toFixed(1)}%
+        {h.inceptionDate && <span className="text-slate-400 font-normal"> · since {formatMonthYear(h.inceptionDate)}</span>}
+      </span>
+    )
   }
   const parts = [
     h.xirr3yr != null ? `3yr ${h.xirr3yr.toFixed(1)}%` : null,
@@ -17,7 +27,7 @@ export function XirrInline({ product }: { product: ProductMaster }) {
   return (
     <span className="text-[11px] text-slate-500 font-medium">
       {parts.join(' · ')}
-      {h.asOf && <span className="text-slate-400 font-normal"> · as of {h.asOf}</span>}
+      {h.asOf && <span className="text-slate-400 font-normal"> · as of {formatMonthYear(h.asOf)}</span>}
     </span>
   )
 }
@@ -97,9 +107,20 @@ export function ProductDeepDive({
   primary: ProductMaster
   alternate: ProductMaster | null
 }) {
+  // F-02: a non-removable disclosure must accompany any third-party product shown.
+  const showsThirdParty = !primary.isUjjivanProduct || (!!alternate && !alternate.isUjjivanProduct)
+
   return (
     <div className="mt-3 border-t border-slate-100 pt-3">
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Deep dive</p>
+
+      {/* F-02: honest coverage disclosure for third-party (non-Ujjivan) options */}
+      {showsThirdParty && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 mb-2">
+          <span className="text-amber-500 shrink-0 text-sm mt-0.5">ⓘ</span>
+          <p className="text-[11px] text-amber-800">{THIRD_PARTY_DISCLOSURE}</p>
+        </div>
+      )}
 
       {/* Primary recommended */}
       <div className="rounded-lg border border-blue-200 bg-blue-50/50 px-3 py-2.5">

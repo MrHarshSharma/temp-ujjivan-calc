@@ -7,13 +7,28 @@ import type { ProductMaster, ProductReturnHistory } from '@/types'
 
 /** A product is a "protection" product (XIRR N/A) when it carries no return history. */
 export function isProtectionProduct(product: ProductMaster): boolean {
-  const { xirr3yr, xirr5yr, xirr10yr } = product.returnHistory
-  return product.category === 'INSURANCE' || (xirr3yr === null && xirr5yr === null && xirr10yr === null)
+  const h = product.returnHistory
+  if (product.category === 'INSURANCE') return true
+  return (
+    h.xirr3yr === null && h.xirr5yr === null && h.xirr10yr === null &&
+    h.xirrSinceInception == null
+  )
 }
 
-/** True when at least one XIRR horizon is populated. */
+/** True when at least one XIRR horizon (or a since-inception return) is populated. */
 export function hasXirr(history: ProductReturnHistory): boolean {
-  return history.xirr3yr !== null || history.xirr5yr !== null || history.xirr10yr !== null
+  return (
+    history.xirr3yr !== null || history.xirr5yr !== null || history.xirr10yr !== null ||
+    history.xirrSinceInception != null
+  )
+}
+
+/**
+ * F-07: a fund is "too new" for standard horizons — show "Since inception" instead.
+ * True when there's no 3yr number but a since-inception return is available.
+ */
+export function isSinceInceptionOnly(history: ProductReturnHistory): boolean {
+  return history.xirr3yr === null && history.xirrSinceInception != null
 }
 
 /**
