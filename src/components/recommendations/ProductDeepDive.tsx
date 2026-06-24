@@ -142,7 +142,7 @@ export function ProductDeepDive({
         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 mt-2">
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-5">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">Alternate option</span>
                 <p className="text-sm font-semibold text-slate-900">{alternate.name}</p>
               </div>

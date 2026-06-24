@@ -26,37 +26,16 @@ const FOUNDATION_CATEGORIES: Set<GoalCategory> = new Set([
   'EMERGENCY_FUND', 'RETIREMENT',
 ])
 
-const GOAL_TIPS: Partial<Record<GoalCategory, string>> = {
-  RETIREMENT: 'Ask when they picture stopping work. Link the SIP to that specific retirement date to make it concrete.',
-  EDUCATION: "Ask about the child's current age and which college they're aiming for — ambitious parents respond to corpus numbers tied to specific institutions.",
-  EMERGENCY_FUND: 'Frame this as "sleep money" — the amount that means no panic if income stops for 6 months.',
-  HOME_PURCHASE: 'Show the down payment as the first milestone, not the full property cost. Smaller number, easier commitment.',
-  REAL_ESTATE: 'Ask if this is for self-use or investment. The answer changes how you frame returns.',
-  CHILDS_MARRIAGE: 'Ask what kind of wedding they envision. Cultural context makes this goal feel real and urgent.',
-  OWN_MARRIAGE: 'Keep it light — ask what the dream day looks like, then work backwards from the cost.',
-  VEHICLE: 'Ask if they want to avoid a loan. Frame the SIP as "own it outright, pay no interest".',
-  TRAVEL: 'People underestimate travel costs — show the inflation-adjusted number, it usually surprises them.',
-  BUSINESS: 'Ask if they have a target year in mind for starting. A date drives commitment.',
-  CRITICAL_ILLNESS: 'Mention that 1 in 5 people face a critical illness before 60. Personalises the risk.',
-  LIFE_PROTECTION: 'Ask about dependents — spouse, parents, children. The number of dependents drives the cover conversation.',
-  FAMILY_HEALTH: 'Hospital costs double every 7 years. Show what a 5-day ICU stay costs today vs at retirement.',
-  GOLD_PURCHASE: 'Suggest sovereign gold bonds or gold ETFs over physical gold — better returns and no storage risk.',
-  LOAN_FORECLOSURE: 'Calculate the total interest saved by foreclosing early — that number is usually the strongest motivator.',
-  LEGACY_INHERITANCE: "Ask what they want to leave behind for their family. Let them answer first, then present the numbers.",
-  SABBATICAL: 'Frame it as "financial independence for a year" — sounds more achievable than a career break.',
-  CHARITY: 'Mention 80G tax deductions if applicable. Makes it an easier yes.',
-}
-
 const PRODUCT_RATIONALE: Partial<Record<string, string>> = {
-  MUTUAL_FUND: 'Equity mutual funds deliver inflation-beating returns over long horizons (5+ years).',
-  EQUITY: 'Direct equity for higher risk tolerance and long time horizons (7+ years).',
-  SIP: 'Systematic investment smooths out market volatility through rupee cost averaging.',
-  FIXED_DEPOSIT: 'Capital protection with guaranteed returns — best for near-term goals (< 3 years).',
-  PPF: 'Tax-free compounding under Section 80C — ideal for long-term retirement building.',
-  NPS: 'Government-backed retirement product with equity exposure and additional tax benefits.',
-  GOLD: 'Hedge against inflation and currency risk — limit to 5–10% of overall portfolio.',
-  BONDS: 'Steady income with lower volatility than equity — suitable for conservative allocations.',
-  INSURANCE: 'Term cover to protect the entire financial plan if income stops unexpectedly.',
+  MUTUAL_FUND: 'Inflation-beating returns over 5+ years.',
+  EQUITY: 'Higher-return potential for 7+ year horizons.',
+  SIP: 'Smooths volatility via rupee cost averaging.',
+  FIXED_DEPOSIT: 'Capital protection for near-term goals (<3 yrs).',
+  PPF: 'Tax-free compounding under Section 80C.',
+  NPS: 'Retirement product with equity exposure + tax breaks.',
+  GOLD: 'Inflation hedge — cap at 5–10% of portfolio.',
+  BONDS: 'Steady income, lower volatility than equity.',
+  INSURANCE: 'Term cover protects the plan if income stops.',
 }
 
 /**
@@ -283,7 +262,6 @@ export function RecommendationsPage() {
             const goal = userGoals.find(g => g.id === gr.goalId)
             if (!goal) return null
             const analysis = goalAnalyses.find(a => a.goalId === gr.goalId)
-            const tip = GOAL_TIPS[goal.category]
             const yearsAway = goal.targetYear - CURRENT_YEAR
 
             // F-03: primary = highest-allocation product for this goal; alternate resolved from master.
@@ -342,19 +320,10 @@ export function RecommendationsPage() {
                   <div className="mb-3">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Products to recommend</p>
 
-                    {/* F-09: per-goal SIP breakdown across products */}
+                    {/* F-09: per-goal SIP total — per-product split shown in each row below */}
                     {gr.allocations.length > 1 && (
                       <p className="text-[11px] text-slate-500 mb-2">
-                        {formatCurrency(gr.totalMonthlySIP)}/mo —{' '}
-                        {gr.allocations.map((a, i) => {
-                          const p = products.find(pr => pr.id === a.productId)
-                          return (
-                            <span key={a.productId}>
-                              {i > 0 && ' + '}
-                              <span className="text-slate-700 font-medium">{formatCurrency(a.monthlyAmount)}</span> via {p?.name ?? 'product'}
-                            </span>
-                          )
-                        })}
+                        <span className="text-slate-700 font-medium">{formatCurrency(gr.totalMonthlySIP)}/mo</span> across {gr.allocations.length} products
                       </p>
                     )}
 
@@ -405,15 +374,6 @@ export function RecommendationsPage() {
                   <ProductDeepDive primary={primaryProduct} alternate={alternateProduct} />
                 )}
 
-                {/* Manager conversation tip */}
-                {tip && (
-                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5">
-                    <span className="text-blue-400 shrink-0 text-sm mt-0.5">💬</span>
-                    <p className="text-xs text-blue-800">
-                      <span className="font-semibold">Conversation tip: </span>{tip}
-                    </p>
-                  </div>
-                )}
               </Card>
             )
           })}

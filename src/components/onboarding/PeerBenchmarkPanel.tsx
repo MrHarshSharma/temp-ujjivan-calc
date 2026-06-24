@@ -56,15 +56,6 @@ export function PeerBenchmarkPanel({ age, tier }: { age: number; tier: RiskTier 
         Peers your age invest {formatCurrency(b.sipAmountRange.min)}–{formatCurrency(b.sipAmountRange.max)} per month on average.
       </p>
 
-      {/* RM script */}
-      <div className="flex items-start gap-2 bg-white border border-indigo-100 rounded-lg px-3 py-2 mt-3">
-        <span className="text-indigo-400 shrink-0 text-sm mt-0.5">💬</span>
-        <p className="text-xs text-indigo-800">
-          <span className="font-semibold">Share with client: </span>
-          Most people your age are investing around {b.avgSipPctOfIncome}% of income. Would you like to consider a slightly higher commitment?
-        </p>
-      </div>
-
       <p className="text-[10px] text-slate-400 mt-2">Source: {BENCHMARK_SOURCE}</p>
     </div>
   )
