@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input'
 import { formatCurrency } from '@/utils/format.utils'
 import type { ProductMaster } from '@/types'
 
-type Tab = 'analytics' | 'products' | 'events'
+type Tab = 'analytics' | 'products'
 
 interface Analytics {
   plansGenerated: number; uniqueClients: number; sessionsStarted: number
@@ -14,10 +14,6 @@ interface Analytics {
   topProducts: { name: string; count: number }[]
   topGoals: { name: string; count: number }[]
   recentPlans: { clientName: string; totalMonthlySIP: number; generatedAt: string }[]
-}
-
-interface MaterialEvent {
-  id: string; product_id: string; event_type: string; description: string | null; event_date: string | null; created_at: string
 }
 
 export function AdminPage() {
@@ -68,7 +64,7 @@ export function AdminPage() {
 
       <div className="max-w-5xl mx-auto p-6">
         <div className="flex gap-1 mb-5 border-b border-slate-200">
-          {([['analytics', 'Analytics'], ['products', 'Product Master'], ['events', 'Material Events']] as [Tab, string][]).map(([t, label]) => (
+          {([['analytics', 'Analytics'], ['products', 'Product Master']] as [Tab, string][]).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -82,7 +78,6 @@ export function AdminPage() {
 
         {tab === 'analytics' && <AnalyticsTab token={token} />}
         {tab === 'products' && <ProductsTab token={token} />}
-        {tab === 'events' && <EventsTab token={token} />}
       </div>
     </div>
   )
@@ -153,30 +148,68 @@ function AnalyticsTab({ token }: { token: string }) {
 
 function ProductsTab({ token }: { token: string }) {
   const [products, setProducts] = useState<ProductMaster[]>([])
+  const [baseline, setBaseline] = useState<Record<string, ProductMaster>>({})
   const [error, setError] = useState('')
-  const [savingId, setSavingId] = useState<string | null>(null)
+  const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
 
   const load = useCallback(() => {
     fetch('/api/products')
-      .then(async res => { const d = await res.json(); if (res.ok) setProducts(d.products); else setError(d.error) })
+      .then(async res => {
+        const d = await res.json()
+        if (res.ok) {
+          setProducts(d.products)
+          setBaseline(Object.fromEntries((d.products as ProductMaster[]).map(p => [p.id, p])))
+          setDirtyIds(new Set())
+        } else setError(d.error)
+      })
       .catch(() => setError('Could not load products.'))
   }, [])
   useEffect(load, [load])
 
-  function patch(id: string, p: Partial<ProductMaster>) {
-    setProducts(prev => prev.map(x => x.id === id ? { ...x, ...p } : x))
+  // A row is "dirty" only if an editable field differs from the last-saved baseline.
+  function isDirty(p: ProductMaster) {
+    const base = baseline[p.id]
+    return !base || base.isUjjivanProduct !== p.isUjjivanProduct
+      || base.priorityRank !== p.priorityRank || base.isActive !== p.isActive
   }
 
-  async function save(product: ProductMaster) {
-    setSavingId(product.id)
-    try {
-      const res = await fetch('/api/products', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
-        body: JSON.stringify({ product }),
+  function patch(id: string, p: Partial<ProductMaster>) {
+    setSavedAt(null)
+    setProducts(prev => {
+      const next = prev.map(x => x.id === id ? { ...x, ...p } : x)
+      const updated = next.find(x => x.id === id)!
+      setDirtyIds(d => {
+        const s = new Set(d)
+        if (isDirty(updated)) s.add(id); else s.delete(id)
+        return s
       })
-      if (!res.ok) { const d = await res.json(); setError(d.error ?? 'Save failed.') }
+      return next
+    })
+  }
+
+  async function saveAll() {
+    const changed = products.filter(p => dirtyIds.has(p.id))
+    if (changed.length === 0) return
+    setSaving(true)
+    setError('')
+    try {
+      const results = await Promise.all(changed.map(product =>
+        fetch('/api/products', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
+          body: JSON.stringify({ product }),
+        })
+      ))
+      const failed = results.find(r => !r.ok)
+      if (failed) { const d = await failed.json().catch(() => ({})); setError(d.error ?? 'Some changes could not be saved.'); return }
+      setBaseline(Object.fromEntries(products.map(p => [p.id, p])))
+      setDirtyIds(new Set())
+      setSavedAt(Date.now())
+    } catch {
+      setError('Could not reach the server.')
     } finally {
-      setSavingId(null)
+      setSaving(false)
     }
   }
 
@@ -190,12 +223,12 @@ function ProductsTab({ token }: { token: string }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-slate-50 text-left text-xs text-slate-500">
-            <th className="px-4 py-2">Product</th><th>Coverage</th><th>Priority</th><th>Active</th><th></th>
+            <th className="px-4 py-2">Product</th><th>Coverage</th><th>Priority</th><th>Active</th>
           </tr>
         </thead>
         <tbody>
           {products.map(p => (
-            <tr key={p.id} className="border-b border-slate-100">
+            <tr key={p.id} className={`border-b border-slate-100 ${dirtyIds.has(p.id) ? 'bg-amber-50' : ''}`}>
               <td className="px-4 py-2 font-medium text-slate-800">{p.name}</td>
               <td>
                 <select
@@ -218,69 +251,20 @@ function ProductsTab({ token }: { token: string }) {
               <td>
                 <input type="checkbox" checked={p.isActive} onChange={e => patch(p.id, { isActive: e.target.checked })} />
               </td>
-              <td className="px-2">
-                <button onClick={() => save(p)} disabled={savingId === p.id}
-                  className="text-xs font-medium text-emerald-700 hover:underline disabled:opacity-50">
-                  {savingId === p.id ? 'Saving…' : 'Save'}
-                </button>
-              </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
-  )
-}
 
-function EventsTab({ token }: { token: string }) {
-  const [events, setEvents] = useState<MaterialEvent[]>([])
-  const [error, setError] = useState('')
-  const [form, setForm] = useState({ productId: '', eventType: 'manager_change', description: '', eventDate: '' })
-
-  const load = useCallback(() => {
-    fetch('/api/material-events', { headers: { 'x-admin-token': token } })
-      .then(async res => { const d = await res.json(); if (res.ok) setEvents(d.events); else setError(d.error) })
-      .catch(() => setError('Could not load events.'))
-  }, [token])
-  useEffect(load, [load])
-
-  async function add() {
-    if (!form.productId) { setError('Product ID is required.'); return }
-    setError('')
-    const res = await fetch('/api/material-events', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
-      body: JSON.stringify(form),
-    })
-    if (res.ok) { setForm({ productId: '', eventType: 'manager_change', description: '', eventDate: '' }); load() }
-    else { const d = await res.json(); setError(d.error ?? 'Add failed.') }
-  }
-
-  return (
-    <div className="space-y-4">
-      {error && <Notice>{error}</Notice>}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 grid md:grid-cols-4 gap-3">
-        <Input label="Product ID" value={form.productId} onChange={e => setForm(f => ({ ...f, productId: e.target.value }))} placeholder="prod_equity_mf" />
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-700">Event type</label>
-          <select value={form.eventType} onChange={e => setForm(f => ({ ...f, eventType: e.target.value }))}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="manager_change">Fund manager change</option>
-            <option value="merger">Scheme merger</option>
-            <option value="underperformance">Underperformance alert</option>
-          </select>
-        </div>
-        <Input label="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-        <div className="flex items-end"><Button onClick={add} className="w-full justify-center">Add event</Button></div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-        {events.length === 0 ? <p className="p-4 text-sm text-slate-400">No material events flagged.</p> :
-          events.map(ev => (
-            <div key={ev.id} className="p-3 text-sm flex justify-between">
-              <span><span className="font-medium">{ev.product_id}</span> — {ev.event_type.replace('_', ' ')}{ev.description ? `: ${ev.description}` : ''}</span>
-              <span className="text-xs text-slate-400">{new Date(ev.created_at).toLocaleDateString('en-IN')}</span>
-            </div>
-          ))}
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-slate-100 bg-slate-50">
+        <span className="text-xs text-slate-500">
+          {dirtyIds.size > 0
+            ? `${dirtyIds.size} unsaved change${dirtyIds.size > 1 ? 's' : ''}`
+            : savedAt ? 'All changes saved.' : 'No unsaved changes.'}
+        </span>
+        <Button onClick={saveAll} disabled={saving || dirtyIds.size === 0}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </Button>
       </div>
     </div>
   )
